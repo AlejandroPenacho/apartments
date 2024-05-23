@@ -1,6 +1,13 @@
 import requests
 import json
+import csv
+import os
+import time
 from bs4 import BeautifulSoup
+
+DATA_DIR = "data"
+DB_FILENAME = "apartments_db.csv"
+
 
 class Item:
     def __init__(self, html):
@@ -56,33 +63,107 @@ class Item:
         return output
 
 
-url = "https://sssb.se/widgets/?pagination=0&paginationantal=0&callback=jQuery17203738205469265453_1716401358472&widgets%5B%5D=alert&widgets%5B%5D=objektsummering%40lagenheter&widgets%5B%5D=objektfilter%40lagenheter&widgets%5B%5D=objektsortering%40lagenheter&widgets%5B%5D=objektlistabilder%40lagenheter&widgets%5B%5D=pagineringantal%40lagenheter&widgets%5B%5D=paginering%40lagenheter&widgets%5B%5D=pagineringgofirst%40lagenheter&widgets%5B%5D=pagineringgonew%40lagenheter&widgets%5B%5D=pagineringlista%40lagenheter&widgets%5B%5D=pagineringgoold%40lagenheter&widgets%5B%5D=pagineringgolast%40lagenheter"
+class ApartmentDatabase:
+    def __init__(self, filename):
+        self.filename = filename
 
-"""
-response = requests.get(url).text
-with open("cached_data.json", "w") as file:
-    file.write(response)
-"""
+    def get_all_ids(self):
+        with open(self.filename) as file:
+            file = csv.reader(file)
+            return [x[0] for x in file][1:]
 
-with open("cached_data.json") as file:
-    response = file.read()
+    def add_item(self, item: Item):
+        with open(self.filename, "a") as file:
+            file = csv.writer(file)
+            file.writerow([
+                item.id,
+                item.type,
+                item.address,
+                item.area,
+                item.living_space,
+                item.rent,
+                item.contract_start,
+                item.electricity_included,
+                item.free_rent_summer,
+                item.max_4_years
+            ])
+
+    @classmethod
+    def create(cls, filename):
+        with open(filename, "w") as file:
+            file = csv.writer(file)
+            file.writerow(
+                ["Id", "Type", "Address", "Area", "Living space", "Rent", "Contract start", "Electricity free", "Free rent summer", "Max 4 years"]
+            )
+
+            return cls(filename)
 
 
+def get_all_items():
+    url = "https://sssb.se/widgets/?pagination=0&paginationantal=0&callback=jQuery17203738205469265453_1716401358472&widgets%5B%5D=alert&widgets%5B%5D=objektsummering%40lagenheter&widgets%5B%5D=objektfilter%40lagenheter&widgets%5B%5D=objektsortering%40lagenheter&widgets%5B%5D=objektlistabilder%40lagenheter&widgets%5B%5D=pagineringantal%40lagenheter&widgets%5B%5D=paginering%40lagenheter&widgets%5B%5D=pagineringgofirst%40lagenheter&widgets%5B%5D=pagineringgonew%40lagenheter&widgets%5B%5D=pagineringlista%40lagenheter&widgets%5B%5D=pagineringgoold%40lagenheter&widgets%5B%5D=pagineringgolast%40lagenheter"
 
-paren_position = response.find("(")
-trimmed_response = response[paren_position+1:-2]
+    response = requests.get(url).text
 
-all_data = json.loads(trimmed_response)
+    """
+    with open("cached_data.json", "w") as file:
+        file.write(response)
+    """
 
-data = BeautifulSoup(all_data["html"]["objektlistabilder@lagenheter"], features="html.parser")
+    """
+    with open("cached_data.json") as file:
+        response = file.read()
+    """
 
-items = data.find_all(class_="Box ObjektListItem")
+    paren_position = response.find("(")
+    trimmed_response = response[paren_position+1:-2]
+
+    all_data = json.loads(trimmed_response)
+
+    data = BeautifulSoup(all_data["html"]["objektlistabilder@lagenheter"], features="html.parser")
+
+    items = data.find_all(class_="Box ObjektListItem")
+
+    return [Item(x) for x in items]
+
+def save_stats(items, path):
+    first_row = ["Id", "Max queue days", "Queue length"]
+    rows = [
+        [item.id, item.queue_max_days, item.queue_length]
+        for item in items
+    ]
+
+    with open(path, "w") as file:
+        file = csv.writer(file)
+        file.writerow(first_row)
+        file.writerows(rows)
 
 
-print(f"{len(items)} apartments")
+if __name__ == "__main__":
+    items = get_all_items()
+    n_items = len(items)
 
-for element in items:
-    item = Item(element)
-    print(item)
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
 
-# print(response)
+    # Save stats
+    local_time = time.localtime()
+    stats_filename = f"{local_time.tm_year:0>4}{local_time.tm_mon:0>2}{local_time.tm_mday:0>2}-{local_time.tm_hour:0>2}{local_time.tm_min:0>2}.csv"
+    stats_path = os.path.join(DATA_DIR, stats_filename)
+    save_stats(items, stats_path)
+
+    # Update (or create) database
+    db_path = os.path.join(DATA_DIR, DB_FILENAME)
+
+    if not os.path.exists(db_path):
+        db = ApartmentDatabase.create(db_path)
+    else:
+        db = ApartmentDatabase(db_path)
+
+    n_new_ids = 0
+    all_registered_id = db.get_all_ids()
+    for item in items:
+        if item.id not in all_registered_id:
+            n_new_ids += 1
+            db.add_item(item)
+
+    print(f"Registered {n_items} apartments, {n_new_ids} of them new")
