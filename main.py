@@ -7,10 +7,58 @@ from bs4 import BeautifulSoup
 
 DATA_DIR = "data"
 DB_FILENAME = "apartments_db.csv"
+FIELD_NAMES = ["Id", "Type", "Address", "Area", "Floor", "Living space", "Rent", "Contract start", "Electricity included", "Free rent summer", "Max 4 years"]
 
+class Apartment:
+    def __init__(self):
+        self.type: str = None
+        self.address: str = None
+        self.free_text: str = None
+        self.id: str = None
+        self.area: str = None
+        self.floor: int = None
+        self.living_space: int = None
+        self.rent: int = None
+        self.contract_start: str = None
+        self.electricity_included: bool = None
+        self.max_4_years: bool = None
+        self.free_rent_summer: bool = None
 
-class Item:
-    def __init__(self, html):
+    def __str__(self):
+        output = ""
+        output += f"Type:                {self.type}\n"
+        output += f"Address:             {self.address}\n"
+        output += f"Free text:           {self.free_text}\n"
+        output += f"Id:                  {self.id}\n"
+        output += f"Area:                {self.area}\n"
+        output += f"Living space:        {self.living_space}\n"
+        output += f"Rent:                {self.rent} SEK\n"
+        output += f"Contract start:      {self.contract_start}\n"
+        output += f"Electricity free:    {self.electricity_included}\n"
+        output += f"Free rent summer:    {self.free_rent_summer}\n"
+        output += f"Max 4 years:         {self.max_4_years}\n"
+
+        return output
+
+    @classmethod
+    def from_csv_row(cls, row):
+        self = cls()
+        self.id = row["Id"]
+        self.type = row["Type"]
+        self.address = row["Address"]
+        self.area = row["Area"]
+        self.living_space = int(row["Living space"])
+        self.floor = int(row["Floor"])
+        self.rent = int(row["Rent"])
+        self.contract_start = row["Contract start"]
+        self.electricity_included = row["Electricity included"]
+        self.free_rent_summer = row["Free rent summer"]
+        self.max_4_years = row["Max 4 years"]
+        return self
+
+    @classmethod
+    def from_html(cls, html):
+        self = cls()
         self.type = html.find(class_="ObjektTyp").text.strip()
         self.address = html.find(class_="ObjektAdress").text.strip()
         self.free_text = html.find(class_="ObjektFritext").text.strip()
@@ -34,31 +82,35 @@ class Item:
 
         self.contract_start = html.find("dd", class_="ObjektInflytt hidden-phone").text.strip()
 
-        queue_data = html.find("dd", class_="ObjektAntalIntresse hidden-phone").text.strip()
-        self.queue_max_days = int(queue_data.split()[0])
-        self.queue_length = int(queue_data.split()[1][1:-3])
-
         self.electricity_included = html.find(class_="PropertyItem Egenskap-1036") is not None
         self.max_4_years = html.find(class_="PropertyItem Egenskap-1093") is not None
         self.free_rent_summer = html.find("find out what should go here") is not None
 
+        return self
 
+
+class SSSBPageItem:
+    def __init__(self, html):
+        self.apartment = Apartment.from_html(html)
+        queue_data = html.find("dd", class_="ObjektAntalIntresse hidden-phone").text.strip()
+        self.queue_max_days = int(queue_data.split()[0])
+        self.queue_length = int(queue_data.split()[1][1:-3])
 
     def __str__(self):
         output = ""
-        output += f"Type:                {self.type}\n"
-        output += f"Address:             {self.address}\n"
-        output += f"Free text:           {self.free_text}\n"
-        output += f"Id:                  {self.id}\n"
-        output += f"Area:                {self.area}\n"
-        output += f"Living space:        {self.living_space}\n"
-        output += f"Rent:                {self.rent} SEK\n"
-        output += f"Contract start:      {self.contract_start}\n"
+        output += f"Type:                {self.apartment.type}\n"
+        output += f"Address:             {self.apartment.address}\n"
+        output += f"Free text:           {self.apartment.free_text}\n"
+        output += f"Id:                  {self.apartment.id}\n"
+        output += f"Area:                {self.apartment.area}\n"
+        output += f"Living space:        {self.apartment.living_space}\n"
+        output += f"Rent:                {self.apartment.rent} SEK\n"
+        output += f"Contract start:      {self.apartment.contract_start}\n"
+        output += f"Electricity free:    {self.apartment.electricity_included}\n"
+        output += f"Free rent summer:    {self.apartment.free_rent_summer}\n"
+        output += f"Max 4 years:         {self.apartment.max_4_years}\n"
         output += f"Queue max days:      {self.queue_max_days}\n"
         output += f"Queue length:        {self.queue_length}\n"
-        output += f"Electricity free:    {self.electricity_included}\n"
-        output += f"Free rent summer:    {self.free_rent_summer}\n"
-        output += f"Max 4 years:         {self.max_4_years}\n"
 
         return output
 
@@ -72,29 +124,33 @@ class ApartmentDatabase:
             file = csv.reader(file)
             return [x[0] for x in file][1:]
 
-    def add_item(self, item: Item):
+    def add_apartment(self, item: Apartment):
         with open(self.filename, "a") as file:
-            file = csv.writer(file)
-            file.writerow([
-                item.id,
-                item.type,
-                item.address,
-                item.area,
-                item.living_space,
-                item.rent,
-                item.contract_start,
-                item.electricity_included,
-                item.free_rent_summer,
-                item.max_4_years
-            ])
+            file = csv.DictWriter(file, FIELD_NAMES)
+            file.writerow({
+                "Id": item.id,
+                "Type": item.type,
+                "Address": item.address,
+                "Area": item.area,
+                "Floor": item.floor,
+                "Living space": item.living_space,
+                "Rent": item.rent,
+                "Contract start": item.contract_start,
+                "Electricity included": item.electricity_included,
+                "Free rent summer": item.free_rent_summer,
+                "Max 4 years": item.max_4_years
+            })
+
+    def get_apartments(self):
+        with open(self.filename) as file:
+            file = csv.DictReader(file)
+            return [Apartment.from_csv_row(row) for row in file]
 
     @classmethod
     def create(cls, filename):
         with open(filename, "w") as file:
             file = csv.writer(file)
-            file.writerow(
-                ["Id", "Type", "Address", "Area", "Living space", "Rent", "Contract start", "Electricity free", "Free rent summer", "Max 4 years"]
-            )
+            file.writerow(FIELD_NAMES)
 
             return cls(filename)
 
@@ -123,12 +179,12 @@ def get_all_items():
 
     items = data.find_all(class_="Box ObjektListItem")
 
-    return [Item(x) for x in items]
+    return [SSSBPageItem(x) for x in items]
 
 def save_stats(items, path):
     first_row = ["Id", "Max queue days", "Queue length"]
     rows = [
-        [item.id, item.queue_max_days, item.queue_length]
+        [item.apartment.id, item.queue_max_days, item.queue_length]
         for item in items
     ]
 
@@ -136,6 +192,15 @@ def save_stats(items, path):
         file = csv.writer(file)
         file.writerow(first_row)
         file.writerows(rows)
+
+
+def retrieve_apartments():
+    db = ApartmentDatabase(os.path.join(DATA_DIR, DB_FILENAME))
+
+    apartments = db.get_apartments()
+
+    for ap in apartments:
+        print(ap)
 
 
 if __name__ == "__main__":
@@ -162,8 +227,8 @@ if __name__ == "__main__":
     n_new_ids = 0
     all_registered_id = db.get_all_ids()
     for item in items:
-        if item.id not in all_registered_id:
+        if item.apartment.id not in all_registered_id:
             n_new_ids += 1
-            db.add_item(item)
+            db.add_item(item.apartment)
 
     print(f"Registered {n_items} apartments, {n_new_ids} of them new")
