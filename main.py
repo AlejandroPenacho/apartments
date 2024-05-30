@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 
 DATA_DIR = "data"
 DB_FILENAME = "apartments_db.csv"
-FIELD_NAMES = ["Id", "Type", "Address", "Area", "Floor", "Living space", "Rent", "Contract start", "Electricity included", "Free rent summer", "Max 4 years"]
+FIELD_NAMES = ["Id", "Type", "Address", "Area", "Floor", "Living space", "Rent", "Contract start", "Electricity included", "Free rent summer", "Max 4 years", "Link", "Free text"]
 
 class Apartment:
     def __init__(self):
@@ -19,6 +19,7 @@ class Apartment:
         self.floor: int = None
         self.living_space: int = None
         self.rent: int = None
+        self.link: str = None
         self.contract_start: str = None
         self.electricity_included: bool = None
         self.max_4_years: bool = None
@@ -54,12 +55,15 @@ class Apartment:
         self.electricity_included = row["Electricity included"]
         self.free_rent_summer = row["Free rent summer"]
         self.max_4_years = row["Max 4 years"]
+        self.link = row["Link"]
+        self.free_text = row["Text"]
         return self
 
     @classmethod
     def from_html(cls, html):
         self = cls()
         self.type = html.find(class_="ObjektTyp").text.strip()
+        self.link = html.find(class_="ObjektTyp").contents[0]["href"]
         self.address = html.find(class_="ObjektAdress").text.strip()
         self.free_text = html.find(class_="ObjektFritext").text.strip()
 
@@ -124,21 +128,23 @@ class ApartmentDatabase:
             file = csv.reader(file)
             return [x[0] for x in file][1:]
 
-    def add_apartment(self, item: Apartment):
+    def add_apartment(self, apartment: Apartment):
         with open(self.filename, "a") as file:
             file = csv.DictWriter(file, FIELD_NAMES)
             file.writerow({
-                "Id": item.id,
-                "Type": item.type,
-                "Address": item.address,
-                "Area": item.area,
-                "Floor": item.floor,
-                "Living space": item.living_space,
-                "Rent": item.rent,
-                "Contract start": item.contract_start,
-                "Electricity included": item.electricity_included,
-                "Free rent summer": item.free_rent_summer,
-                "Max 4 years": item.max_4_years
+                "Id": apartment.id,
+                "Type": apartment.type,
+                "Link": apartment.link,
+                "Address": apartment.address,
+                "Area": apartment.area,
+                "Floor": apartment.floor,
+                "Living space": apartment.living_space,
+                "Rent": apartment.rent,
+                "Contract start": apartment.contract_start,
+                "Electricity included": apartment.electricity_included,
+                "Free rent summer": apartment.free_rent_summer,
+                "Max 4 years": apartment.max_4_years,
+                "Free text": apartment.free_text
             })
 
     def get_apartments(self):
@@ -229,6 +235,6 @@ if __name__ == "__main__":
     for item in items:
         if item.apartment.id not in all_registered_id:
             n_new_ids += 1
-            db.add_item(item.apartment)
+            db.add_apartment(item.apartment)
 
     print(f"Registered {n_items} apartments, {n_new_ids} of them new")
