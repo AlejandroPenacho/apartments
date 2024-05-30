@@ -56,7 +56,7 @@ class Apartment:
         self.free_rent_summer = row["Free rent summer"]
         self.max_4_years = row["Max 4 years"]
         self.link = row["Link"]
-        self.free_text = row["Text"]
+        self.free_text = row["Free text"]
         return self
 
     @classmethod
@@ -160,6 +160,63 @@ class ApartmentDatabase:
 
             return cls(filename)
 
+class QueueStats:
+    def __init__(self):
+        self.data = None
+        pass
+
+    @classmethod
+    def from_filename(cls, filename):
+        self = cls()
+        data = {}
+        with open(filename) as file:
+            file = csv.reader(file)
+            next(file)
+            for row in file:
+                data[row[0]] = [int(row[1]), int(row[2])]
+
+        self.data = data
+        return self
+
+    @classmethod
+    def from_items(cls, items: list[SSSBPageItem]):
+        self = cls()
+        data = {}
+        for item in items:
+            data[item.apartment.id] = [item.queue_max_days, item.queue_length]
+
+        self.data = data
+        return self
+
+    def save(self, filename: str):
+        with open(filename, "w") as file:
+            file = csv.writer(file)
+            file.writerow(["Id", "Max queue days", "Queue length"])
+            for (id, data) in self.data.items():
+                file.writerow([id, data[0], data[1]])
+
+
+class CompleteData:
+    def __init__(self, directory, apartment_db_filename):
+        apartment_db = ApartmentDatabase(os.path.join(directory, apartment_db_filename))
+        apartments = apartment_db.get_apartments()
+
+        self.apartment_data = {x.id : x for x in apartments}
+        self.queue_data = {x.id: [] for x in apartments}
+        self.datapoints = []
+
+        for filename in os.listdir(directory):
+            if filename == apartment_db_filename:
+                continue
+            
+            self.datapoints.append(filename.split(".")[0])
+            for x in self.queue_data.values():
+                x.append(None)
+
+            queue_stats = QueueStats.from_filename(os.path.join(directory, filename))
+            for id in queue_stats.data.keys():
+                self.queue_data[id][-1] = queue_stats.data[id]
+
 
 def get_all_items():
     url = "https://sssb.se/widgets/?pagination=0&paginationantal=0&callback=jQuery17203738205469265453_1716401358472&widgets%5B%5D=alert&widgets%5B%5D=objektsummering%40lagenheter&widgets%5B%5D=objektfilter%40lagenheter&widgets%5B%5D=objektsortering%40lagenheter&widgets%5B%5D=objektlistabilder%40lagenheter&widgets%5B%5D=pagineringantal%40lagenheter&widgets%5B%5D=paginering%40lagenheter&widgets%5B%5D=pagineringgofirst%40lagenheter&widgets%5B%5D=pagineringgonew%40lagenheter&widgets%5B%5D=pagineringlista%40lagenheter&widgets%5B%5D=pagineringgoold%40lagenheter&widgets%5B%5D=pagineringgolast%40lagenheter"
@@ -187,29 +244,7 @@ def get_all_items():
 
     return [SSSBPageItem(x) for x in items]
 
-def save_stats(items, path):
-    first_row = ["Id", "Max queue days", "Queue length"]
-    rows = [
-        [item.apartment.id, item.queue_max_days, item.queue_length]
-        for item in items
-    ]
-
-    with open(path, "w") as file:
-        file = csv.writer(file)
-        file.writerow(first_row)
-        file.writerows(rows)
-
-
-def retrieve_apartments():
-    db = ApartmentDatabase(os.path.join(DATA_DIR, DB_FILENAME))
-
-    apartments = db.get_apartments()
-
-    for ap in apartments:
-        print(ap)
-
-
-if __name__ == "__main__":
+def collect_data():
     items = get_all_items()
     n_items = len(items)
 
@@ -220,7 +255,7 @@ if __name__ == "__main__":
     local_time = time.localtime()
     stats_filename = f"{local_time.tm_year:0>4}{local_time.tm_mon:0>2}{local_time.tm_mday:0>2}-{local_time.tm_hour:0>2}{local_time.tm_min:0>2}.csv"
     stats_path = os.path.join(DATA_DIR, stats_filename)
-    save_stats(items, stats_path)
+    QueueStats.from_items(items).save(stats_path)
 
     # Update (or create) database
     db_path = os.path.join(DATA_DIR, DB_FILENAME)
@@ -238,3 +273,8 @@ if __name__ == "__main__":
             db.add_apartment(item.apartment)
 
     print(f"Registered {n_items} apartments, {n_new_ids} of them new")
+
+
+if __name__ == "__main__":
+    data = CompleteData(DATA_DIR, DB_FILENAME)
+    print(data.queue_data)
