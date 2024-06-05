@@ -1,2 +1,0 @@
-source /home/alejandro/anaconda3/bin/activate scraper
-python3 main.py

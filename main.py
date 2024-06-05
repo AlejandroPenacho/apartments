@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 
 DATA_DIR = "data"
 DB_FILENAME = "apartments_db.csv"
-FIELD_NAMES = ["Id", "Type", "Address", "Area", "Floor", "Living space", "Rent", "Contract start", "Electricity included", "Free rent summer", "Max 4 years", "Link", "Free text"]
+FIELD_NAMES = ["Id", "Type", "Area", "Address", "Floor", "Orientation", "Living space", "Rent", "Contract start", "Electricity included", "Free rent summer", "Max 4 years", "Link", "Free text"]
 
 class Apartment:
     def __init__(self):
@@ -17,6 +17,7 @@ class Apartment:
         self.id: str = None
         self.area: str = None
         self.floor: int = None
+        self.orientation: str = None
         self.living_space: int = None
         self.rent: int = None
         self.link: str = None
@@ -27,17 +28,20 @@ class Apartment:
 
     def __str__(self):
         output = ""
-        output += f"Type:                {self.type}\n"
-        output += f"Address:             {self.address}\n"
-        output += f"Free text:           {self.free_text}\n"
         output += f"Id:                  {self.id}\n"
+        output += f"Type:                {self.type}\n"
         output += f"Area:                {self.area}\n"
+        output += f"Address:             {self.address}\n"
+        output += f"Floor:               {self.floor}\n"
+        output += f"Orientation:         {self.orientation}\n"
         output += f"Living space:        {self.living_space}\n"
         output += f"Rent:                {self.rent} SEK\n"
         output += f"Contract start:      {self.contract_start}\n"
         output += f"Electricity free:    {self.electricity_included}\n"
         output += f"Free rent summer:    {self.free_rent_summer}\n"
         output += f"Max 4 years:         {self.max_4_years}\n"
+        output += f"Link:                {self.link}\n"
+        output += f"Free text:           {self.free_text}"
 
         return output
 
@@ -49,8 +53,9 @@ class Apartment:
         self.address = row["Address"]
         self.area = row["Area"]
         self.living_space = int(row["Living space"])
-        self.floor = int(row["Floor"])
+        self.floor = None if row["Floor"] == "" else int(row["Floor"])
         self.rent = int(row["Rent"])
+        self.orientation = row["Orientation"]
         self.contract_start = row["Contract start"]
         self.electricity_included = row["Electricity included"]
         self.free_rent_summer = row["Free rent summer"]
@@ -103,10 +108,9 @@ class SSSBPageItem:
     def __str__(self):
         output = ""
         output += f"Type:                {self.apartment.type}\n"
-        output += f"Address:             {self.apartment.address}\n"
-        output += f"Free text:           {self.apartment.free_text}\n"
-        output += f"Id:                  {self.apartment.id}\n"
         output += f"Area:                {self.apartment.area}\n"
+        output += f"Address:             {self.apartment.address}\n"
+        output += f"Id:                  {self.apartment.id}\n"
         output += f"Living space:        {self.apartment.living_space}\n"
         output += f"Rent:                {self.apartment.rent} SEK\n"
         output += f"Contract start:      {self.apartment.contract_start}\n"
@@ -115,6 +119,7 @@ class SSSBPageItem:
         output += f"Max 4 years:         {self.apartment.max_4_years}\n"
         output += f"Queue max days:      {self.queue_max_days}\n"
         output += f"Queue length:        {self.queue_length}\n"
+        output += f"Free text:           {self.apartment.free_text}\n"
 
         return output
 
@@ -138,12 +143,14 @@ class ApartmentDatabase:
                 "Address": apartment.address,
                 "Area": apartment.area,
                 "Floor": apartment.floor,
+                "Orientation": apartment.orientation,
                 "Living space": apartment.living_space,
                 "Rent": apartment.rent,
                 "Contract start": apartment.contract_start,
                 "Electricity included": apartment.electricity_included,
                 "Free rent summer": apartment.free_rent_summer,
                 "Max 4 years": apartment.max_4_years,
+                "Link": apartment.link,
                 "Free text": apartment.free_text
             })
 
@@ -204,11 +211,11 @@ class CompleteData:
         self.apartment_data = {x.id : x for x in apartments}
         self.queue_data = {x.id: [] for x in apartments}
         self.datapoints = []
+        
+        all_filenames = filter(lambda x: x != apartment_db_filename, os.listdir(directory))
+        all_filenames = sorted(all_filenames)
 
-        for filename in os.listdir(directory):
-            if filename == apartment_db_filename:
-                continue
-            
+        for filename in all_filenames:
             self.datapoints.append(filename.split(".")[0])
             for x in self.queue_data.values():
                 x.append(None)
@@ -276,5 +283,6 @@ def collect_data():
 
 
 if __name__ == "__main__":
-    data = CompleteData(DATA_DIR, DB_FILENAME)
-    print(data.queue_data)
+    collect_data()
+    # data = CompleteData(DATA_DIR, DB_FILENAME)
+    # print(data.queue_data)

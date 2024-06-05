@@ -1,3 +1,6 @@
+__pycache__/
 data/
-data-copy/
+backups/
+run
 cached_data.json
+
